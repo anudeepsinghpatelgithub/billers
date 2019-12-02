@@ -10,27 +10,62 @@ const Bill = require('../../models/Bill')
 // get all bills for any user
 router.get('/',async(req,res)=>{
     try {
-        let bills = await Bill.find();
+        let bills = await Bill.aggregate([{
+            $lookup: {
+                from: "billers", // collection to join
+                localField: "biller",//Bill collection
+                foreignField: "_id",//key name in biller collection
+                as: "billerInfo"// output array field
+            }
+        }]);
+
         if (!bills) {
             return res.status(400).json({ errors: [{ msg: 'No bills found' }] });
         }
-        res.send(bills)
+        return res.send(bills)
     } catch (error) {
         console.log(error)
         return res.status(500).json({ errors: [{ msg: 'Something went wrong' }] });
     }
     
 });
+router.get('/all', async (req, res) => {
+    try {
+
+      let bills =  await Bill.aggregate([ {
+            $lookup: {
+                from: "billers", // collection to join
+                localField: "biller",//field from the input documents
+                foreignField: "_id",//field from the documents of the "from" collection
+                as: "billerInfo"// output array field
+            }
+        }]);
+        return res.send(bills)
+    } catch (error) {
+        console.log(error)
+        return res.status(500).json({ errors: [{ msg: 'Something went wrong' }] });
+    }
+
+});
+
 // get all bills by email/phone
 router.get('/:emailOrPhone',async (req,res)=>{
     try {
-        let bills = await Bill.find({
-            $or: [
-                { email: req.params.emailOrPhone },
-                { mobile: req.params.emailOrPhone }
-            ]
-        });
-        //let bills = await Bill.find({ email: req.params.emailOrPhone}).populate("biller");
+        let bills = await Bill.aggregate([{
+            $match: {
+                $or: [
+                    { email: req.params.emailOrPhone },
+                    { mobile: req.params.emailOrPhone }
+                ]
+            }
+        },{
+            $lookup: {
+                from: "billers", // collection to join
+                localField: "biller",//field from the input documents
+                foreignField: "_id",//field from the documents of the "from" collection
+                as: "billerInfo"// output array field
+            }
+        }]);
         if (!bills) {
             return res.status(400).json({ errors: [{ msg: 'No bills found' }] });
         }
@@ -46,6 +81,8 @@ router.post('/publish',[
     check('email','Email is required').trim().isEmail(),
     check('mobile', 'Mbile is required with country code e.g. 9999999999').trim().isLength({min:10,max:10}),
     check('amount', 'Amount is required').trim().notEmpty(),
+    check('billType', 'billType is required').trim().notEmpty(),
+    check('billName', 'billName is required').trim().notEmpty(),
     check('billerName', 'BillerName is required').trim().notEmpty(),
     check('billStartDate', 'Bill start date is requiried/invalid').trim().isISO8601(),
     check('billEndDate', 'Bill end date is requiried/invalid/should be after start date').trim().isISO8601()
@@ -55,7 +92,7 @@ router.post('/publish',[
         if (!errors.isEmpty()) {
             return res.status(400).json({ errors: errors.array() });
         }
-        let { email, mobile, amount, billerName, billStartDate, billEndDate} = req.body;
+        let { email, mobile, amount, billerName, billStartDate, billEndDate, billType, billName} = req.body;
         email = email.trim().toLowerCase();
         billStartDate = new Date(billStartDate);
         billEndDate = new Date(billEndDate);
@@ -72,7 +109,9 @@ router.post('/publish',[
                 amount,
                 billStartDate,
                 billEndDate,
-                biller:biller._id
+                biller:biller._id,
+                billType,
+                billName
 
             });
             await bill.save();

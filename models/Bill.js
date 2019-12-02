@@ -12,6 +12,14 @@ const BillSchema = new mongoose.Schema({
         type:Number,
         required:true
     },
+    billType: {
+        type: String,
+        required: true
+    },
+    billName: {
+        type: String,
+        required: true
+    },
     biller:{
         type:mongoose.Schema.Types.ObjectId,
         ref:'billers'
