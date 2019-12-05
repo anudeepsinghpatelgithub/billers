@@ -1,6 +1,7 @@
 const experss = require('express');
 const router = experss.Router();
 const { check, validationResult } = require('express-validator');
+var ObjectId = require('mongoose').Types.ObjectId; 
 
 // load model
 
@@ -75,6 +76,61 @@ router.get('/:emailOrPhone',async (req,res)=>{
         return res.status(500).json({ errors: [{ msg: 'Something went wrong' }] });
     }
 });
+// GET ALL BILL BY BILLER
+router.get('/biller/:id', async (req, res) => {
+    try {
+        console.log(req.params.id)
+        let bills = await Bill.aggregate([{
+            $match: {
+                biller: new ObjectId(req.params.id)
+                
+            }
+        }, {
+            $lookup: {
+                from: "billers", // collection to join
+                localField: "biller",//field from the input documents
+                foreignField: "_id",//field from the documents of the "from" collection
+                as: "billerInfo"// output array field
+            }
+        }]);
+        if (!bills) {
+            return res.status(400).json({ errors: [{ msg: 'No bills found' }] });
+        }
+        res.send(bills)
+    } catch (error) {
+        console.log(error)
+        return res.status(500).json({ errors: [{ msg: 'Something went wrong' }] });
+    }
+});
+
+// GET ALL BILL BY BILLER and for given user
+router.get('/biller/:id/:emailOrPhone', async (req, res) => {
+    try {
+        let bills = await Bill.aggregate([{
+            $match: {
+                biller: new ObjectId(req.params.id),
+                $or: [
+                    { email: req.params.emailOrPhone },
+                    { mobile: req.params.emailOrPhone }
+                ]
+            }
+        }, {
+            $lookup: {
+                from: "billers", // collection to join
+                localField: "biller",//field from the input documents
+                foreignField: "_id",//field from the documents of the "from" collection
+                as: "billerInfo"// output array field
+            }
+        }]);
+        if (!bills) {
+            return res.status(400).json({ errors: [{ msg: 'No bills found' }] });
+        }
+        res.send(bills)
+    } catch (error) {
+        console.log(error)
+        return res.status(500).json({ errors: [{ msg: 'Something went wrong' }] });
+    }
+});
 
 // create new bill for given biller
 router.post('/publish',[
@@ -85,14 +141,15 @@ router.post('/publish',[
     check('billName', 'billName is required').trim().notEmpty(),
     check('billerName', 'BillerName is required').trim().notEmpty(),
     check('billStartDate', 'Bill start date is requiried/invalid').trim().isISO8601(),
-    check('billEndDate', 'Bill end date is requiried/invalid/should be after start date').trim().isISO8601()
+    check('billEndDate', 'Bill end date is requiried/invalid/should be after start date').trim().isISO8601(),
+    check('billDueDate', 'Bill due date is requiried/invalid').trim().isISO8601(),
     
 ],async (req,res)=>{
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             return res.status(400).json({ errors: errors.array() });
         }
-        let { email, mobile, amount, billerName, billStartDate, billEndDate, billType, billName} = req.body;
+        let { email, mobile, amount, billerName, billStartDate, billEndDate, billType, billName, billDueDate} = req.body;
         email = email.trim().toLowerCase();
         billStartDate = new Date(billStartDate);
         billEndDate = new Date(billEndDate);
@@ -111,7 +168,8 @@ router.post('/publish',[
                 billEndDate,
                 biller:biller._id,
                 billType,
-                billName
+                billName,
+                billDueDate
 
             });
             await bill.save();

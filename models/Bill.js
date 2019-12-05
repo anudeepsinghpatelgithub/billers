@@ -32,6 +32,10 @@ const BillSchema = new mongoose.Schema({
         type: Date,
         required: true,
     },
+    billDueDate: {
+        type: Date,
+        required: true,
+    },
     paid:{
         type:Boolean,
         default:false
